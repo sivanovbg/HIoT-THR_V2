@@ -30,10 +30,9 @@ PUBLISH
 
 */
 
-//#define poweronoff
+//#define DEBUG_MODE
 
-#define command_sleep
-
+#include "HIoT-THR_Cfg-HomeS.h"
 #include <SPI.h>
 #include <mrf24j.h>   // *** Please use the modified library found within the same repo on GitHub ***
 #include "DHT.h"
@@ -51,16 +50,9 @@ const int pin_interrupt = 2;
 
 #define SHORT_CONNECT_INTERVAL 0x05
 #define LONG_CONNECT_INTERVAL 0x17
-#define SLEEP_INTERVAL 0x17 // 0x05 = 15 s; 0x17 = 60 s; 0x64 = 5 min; 0xA5 = 7 min; 0xC8 = 10 min
+#define SLEEP_INTERVAL 0xC8 // 0x05 = 15 s; 0x17 = 60 s; 0x64 = 5 min; 0xA5 = 7 min; 0xC8 = 10 min
 
 Mrf24j mrf(pin_reset, pin_cs, pin_interrupt);
-
-long sleep_timer = 0;
-long last_time, last_ping, last_pingresp, last_pub;
-long tx_interval = 5000; //5000; // 100 with resp. to sleep interval -- 5000
-long ping_interval = 5000; // 1000 -- 6000
-long pub_interval = 5000; // 2000 // 60000 -- 18000
-long timeout_interval = 60000; // 10000 -- 60000
 
 boolean message_received = false;
 boolean node_connected = false;
@@ -69,8 +61,6 @@ boolean node_subscribed = false;
 char rx_buffer[127];
 char tx_buffer[127];
 uint8_t rx_len;
-
-unsigned long current_time;
 
 float temperature;
 float humidity;
@@ -85,24 +75,24 @@ uint8_t connect_timer = 4;
 
 // Change 0x44 and 0x96 with the 802.15.4 short address bytes of your Client (this node)
 
-uint8_t CONNECT_MSG[] = { 0x0A, 0x04, 0x00, 0x01, 0x03, 0x84, 0xFF, 0xFF, 0x99, 0x96 }; // 0x012C = 5 min; 0x0258 = 10 min; 0x0384 = 15 min; 0x0834 = 35 min duration
+uint8_t CONNECT_MSG[] = { 0x0A, 0x04, 0x00, 0x01, 0x03, 0x84, 0xFF, 0xFF, OWN_A_MSB, 0x96 }; // 0x012C = 5 min; 0x0258 = 10 min; 0x0384 = 15 min; 0x0834 = 35 min duration
 
-uint8_t PINGREQ_MSG[] = { 0x0A, 0x16, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x99, 0x96 };
+uint8_t PINGREQ_MSG[] = { 0x0A, 0x16, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, OWN_A_MSB, 0x96 };
 
 // Several sample messages used within the current implementation set up
 
-uint8_t PUBLISH_MSGON[] = { 0x0B, 0x0C, 0x00, 'o', '9', 0x99, 0x96, ' ', 'R', 'E', 'D' };
-uint8_t PUBLISH_MSGOFF[] = { 0x0B, 0x0C, 0x00, 'o', '9', 0x99, 0x96, 'D', 'a', 'r', 'k' };
-uint8_t PUBLISH_MSGTMP[] = { 0x0C, 0x0C, 0x00, 't', '9', 0x99, 0x96, '-', '-', '-', '-', '-' };
-uint8_t PUBLISH_MSGHUM[] = { 0x0C, 0x0C, 0x00, 'h', '9', 0x99, 0x96, '-', '-', '-', '-', '-' };
+uint8_t PUBLISH_MSGON[] = { 0x0B, 0x0C, 0x00, 'o', msg_n, OWN_A_MSB, 0x96, ' ', 'R', 'E', 'D' };
+uint8_t PUBLISH_MSGOFF[] = { 0x0B, 0x0C, 0x00, 'o', msg_n, OWN_A_MSB, 0x96, 'D', 'a', 'r', 'k' };
+uint8_t PUBLISH_MSGTMP[] = { 0x0C, 0x0C, 0x00, 't', msg_n, OWN_A_MSB, 0x96, '-', '-', '-', '-', '-' };
+uint8_t PUBLISH_MSGHUM[] = { 0x0C, 0x0C, 0x00, 'h', msg_n, OWN_A_MSB, 0x96, '-', '-', '-', '-', '-' };
 
-uint8_t PUBLISH_MSGALR[] = { 0x0C, 0x0C, 0x00, 'r', '9', 0x99, 0x96, 'A', 'L', 'E', 'R', 'T' };
-uint8_t PUBLISH_MSGOPN[] = { 0x0C, 0x0C, 0x00, 'r', '9', 0x99, 0x96, 'O', 'P', 'E', 'N', ' ' };
-uint8_t PUBLISH_MSGCLS[] = { 0x0C, 0x0C, 0x00, 'r', '9', 0x99, 0x96, 'C', 'L', 'O', 'S', 'E' };
+uint8_t PUBLISH_MSGALR[] = { 0x0C, 0x0C, 0x00, 'r', msg_n, OWN_A_MSB, 0x96, 'A', 'L', 'E', 'R', 'T' };
+uint8_t PUBLISH_MSGOPN[] = { 0x0C, 0x0C, 0x00, 'r', msg_n, OWN_A_MSB, 0x96, 'O', 'P', 'E', 'N', ' ' };
+uint8_t PUBLISH_MSGCLS[] = { 0x0C, 0x0C, 0x00, 'r', msg_n, OWN_A_MSB, 0x96, 'C', 'L', 'O', 'S', 'E' };
 
-uint8_t PUBLISH_MSGBAT[] = { 0x0C, 0x0C, 0x00, 'b', '9', 0x99, 0x96, 'b', 'a', 't', '0', '1' };
+uint8_t PUBLISH_MSGBAT[] = { 0x0C, 0x0C, 0x00, 'b', msg_n, OWN_A_MSB, 0x96, 'b', 'a', 't', '0', '1' };
 
-uint8_t SUBSCRIBE_MSG[] = { 0x07, 0x12, 0x00, 0x99, 0x96, 's', '9' };
+uint8_t SUBSCRIBE_MSG[] = { 0x07, 0x12, 0x00, OWN_A_MSB, 0x96, 's', msg_n };
 
 typedef struct
 {
@@ -113,9 +103,6 @@ typedef struct
 
 Message Msg;
 
-#define OWN_ADDRESS 0x9996    // 802.15.4 short address of the Client (this node)
-#define GW_ADDRESS 0x5366    // 802.15.4 short address of the Gateway
-
 #define CONNACK   0x05
 #define PINGRESP  0x17
 #define PUBLISH   0x0C
@@ -125,16 +112,18 @@ Message Msg;
 DHT dht(DHTPIN, DHTTYPE);
 
 void setup() { 
-  
+
+  #ifdef DEBUG_MODE
   Serial.begin(115200);
 
   Serial.println();
-  Serial.println("|MQTT-SN 802.15.4 Net End device Type 1 THR RLP|");
-  Serial.println("|----------------------------------------------|");
+  Serial.println("|HobbyIoT Sensor node Type 1 THR|");
+  Serial.println("|-------------------------------|");
   Serial.print("|Own address: 0x"); Serial.println(OWN_ADDRESS,HEX);
-  Serial.print("|Connection timeout, minutes: "); Serial.println(15);
-  Serial.println("|----------------------------------------------|");
+  Serial.println("|          DEBUG_MODE           |");
+  Serial.println("|-------------------------------|");
   Serial.println();
+  #endif
 
   attachInterrupt(0, interrupt_routine, FALLING);
 
@@ -153,15 +142,7 @@ void setup() {
 //  pinMode(8, OUTPUT); // Test LED
 //  digitalWrite(9, HIGH); // Test LED ON
   
-  last_time = millis();
   interrupts();
-
-  current_time = millis();
-
-  last_time = current_time + tx_interval + 1;
-  last_ping = current_time + ping_interval + 1;
-  last_pingresp = current_time + timeout_interval + 1;
-  last_pub = current_time + pub_interval + 1;
 
   dht.begin();
 
@@ -185,17 +166,22 @@ void reed_routine() {
 
   noInterrupts();
   delay(1000);
+  #ifdef DEBUG_MODE
   Serial.println("----------- REED Routine -----------");
-//  while(1);
+  #endif
   mrf_wake();
   if(digitalRead(3) == 1)
   {
+    #ifdef DEBUG_MODE
     Serial.println("Door/window just OPENED!");
+    #endif
     mrf.send16(GW_ADDRESS,PUBLISH_MSGOPN,sizeof(PUBLISH_MSGOPN));
   }
   else
   {
+    #ifdef DEBUG_MODE
     Serial.println("Door/window just CLOSED!");
+    #endif
     mrf.send16(GW_ADDRESS,PUBLISH_MSGCLS,sizeof(PUBLISH_MSGCLS));
   }
 
@@ -220,22 +206,30 @@ void loop() {
   else {
     get_connected();
     if(node_connected == false) {
+      #ifdef DEBUG_MODE
       Serial.println("Not connected");
+      #endif
       if(connect_timer > 0) {
         connect_timer --;
+        #ifdef DEBUG_MODE
         Serial.println("Waiting for SHORT connect interval");
+        #endif
         timed_sleep(SHORT_CONNECT_INTERVAL);        
       }
 
       else {
+        #ifdef DEBUG_MODE
         Serial.println("Waiting for LONG connect interval");
+        #endif
         timed_sleep(LONG_CONNECT_INTERVAL);
       }
     }
   }
 
   if(timeout_timer == 0) {
+    #ifdef DEBUG_MODE
     Serial.println("Connection timeout ...");
+    #endif
     node_connected = false;
   }
   
@@ -246,7 +240,9 @@ void get_connected() {
 
   int i;
         
+  #ifdef DEBUG_MODE
   Serial.print("Connecting ... ");
+  #endif
 
   mrf.send16(GW_ADDRESS,CONNECT_MSG,sizeof(CONNECT_MSG));
 
@@ -263,7 +259,9 @@ void get_connected() {
     }
 
   if(Msg.MsgType == CONNACK) {
+    #ifdef DEBUG_MODE
     Serial.println("CONNACK received. Connected");
+    #endif
     message_received = false;
     node_connected = true;
     connection_timeout = false;
@@ -276,7 +274,9 @@ void send_pingreq() {
 
   int i;
         
+  #ifdef DEBUG_MODE
   Serial.println("Sending PINGREQ");
+  #endif
   mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
   
   delay(100);
@@ -291,7 +291,9 @@ void send_pingreq() {
       }
 
   if(Msg.MsgType == PINGRESP) {
+    #ifdef DEBUG_MODE
     Serial.println("PINGRESP received");
+    #endif
     message_received = false;
     connection_timeout = false;
     timeout_timer = 3;
@@ -302,7 +304,9 @@ void send_pingreq() {
 
 void timed_sleep(char sleep_count) {
 
-  Serial.println("Wireless module TIMED SLEEP"); 
+  #ifdef DEBUG_MODE
+  Serial.println("Wireless module TIMED SLEEP");
+  #endif
 
   delay(10);
 
@@ -323,7 +327,9 @@ void timed_sleep(char sleep_count) {
 
     spi_off();
 
+    #ifdef DEBUG_MODE
     Serial.println("Arduino is going to SLEEP");
+    #endif
 
 //    digitalWrite(9, LOW); // Test LED OFF
 
@@ -336,7 +342,9 @@ void timed_sleep(char sleep_count) {
 
     mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear the interrupt
 
+    #ifdef DEBUG_MODE
     Serial.println("System wakes up");
+    #endif
 
 //    digitalWrite(9, HIGH); // Test LED ON
     
@@ -347,12 +355,16 @@ void timed_sleep(char sleep_count) {
 void dht_off() {
       digitalWrite(DHTPWR, LOW);  // DHT11 Power off
 //      pinMode(DHTPIN, INPUT); // set to only Imput to remove the internal pull up
+      #ifdef DEBUG_MODE
       Serial.println("DHT11 Power OFF");
+      #endif
 }
 
 void dht_on() {
       digitalWrite(DHTPWR, HIGH);  // DHT11 Power on
+      #ifdef DEBUG_MODE
       Serial.println("DHT11 Power ON");
+      #endif
 }
 
 void spi_off() {
@@ -367,7 +379,9 @@ void spi_off() {
   digitalWrite(MOSI, HIGH);
   digitalWrite(SCK, HIGH);
   
+  #ifdef DEBUG_MODE
   Serial.println("SPI interface OFF");
+  #endif
   
 }
 
@@ -378,7 +392,9 @@ void spi_on() {
   pinMode(MOSI, OUTPUT); // Due leaves HIGH (MOSI)
   pinMode(SCK, OUTPUT);  // Due leaves LOW
   mrf_init();
+  #ifdef DEBUG_MODE
   Serial.println("SPI interface ON (w/mrf_init)");
+  #endif
   
 }
 
@@ -455,7 +471,9 @@ void exchange_data() {
   mrf_sleep();
   dht_on();
   
+  #ifdef DEBUG_MODE
   Serial.println("Reading temperature...");
+  #endif
   temperature = dht.readTemperature(); // get the current temperature
                                            // and prepare the MQTT-SN message
   dtostrf(temperature,0,0,temperature_string);
@@ -467,7 +485,9 @@ void exchange_data() {
   PUBLISH_MSGTMP[i+7] = 0x00;
   PUBLISH_MSGTMP[0] = 7+i; // +2 deleted, MQTT-SN message prepared
 
+  #ifdef DEBUG_MODE
   Serial.println("Reading humidity...");
+  #endif
   humidity = dht.readHumidity(); // get the current humidity
 
   dht_off();
@@ -481,7 +501,9 @@ void exchange_data() {
   PUBLISH_MSGHUM[i+7] = 0x00;
   PUBLISH_MSGHUM[0] = 7+i; // +2 deleted, MQTT-SN message prepared      
 
+  #ifdef DEBUG_MODE
   Serial.println("Reading battery voltage...");
+  #endif
   batt_value = readVcc();
 
   dtostrf(batt_value,0,0,batt_value_string);
@@ -496,15 +518,21 @@ void exchange_data() {
       
   mrf_wake();               // Ready for sending, powering the MRF on.
 
+  #ifdef DEBUG_MODE
   Serial.println("Sending temperature...");
+  #endif
   mrf.send16(GW_ADDRESS,PUBLISH_MSGTMP,sizeof(PUBLISH_MSGTMP)); // send the temperature value
   delay(500);
 
+  #ifdef DEBUG_MODE
   Serial.println("Sending humidity...");
+  #endif
   mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM)); // send the humidity value
   delay(500);
      
+  #ifdef DEBUG_MODE
   Serial.println("Sending battery voltage...");
+  #endif
   mrf.send16(GW_ADDRESS,PUBLISH_MSGBAT,sizeof(PUBLISH_MSGBAT)); // send the battery value
 }
 
@@ -522,14 +550,18 @@ void mrf_wake() {
 
   delay(100); // 20 ms shoud be enough...
 
+  #ifdef DEBUG_MODE
   Serial.println("Wireless module is ON");
+  #endif
 
 }
 
 void mrf_sleep()
 {
 
+  #ifdef DEBUG_MODE
   Serial.println("Wireless module IMMEDIATE SLEEP");
+  #endif
 
 //  delay(50);
   
