@@ -1,31 +1,30 @@
 /*
 
-MQTT-SN 802.15.4 Net
-End device Type 1 THR RLP
-An MQTT-SN Client implementation based on MRF24J40 and Arduino
+HobbyIoT NET End device THR Type 1 sensor node
 
+A simple MQTT-SN over 802.15.4 Client implementation based on MRF24J40 and Arduino
 Visit project website at https://sites.google.com/view/hobbyiot/projects/mqtt-sn-802-15-4
-
 Twitter: @sivanovbg
 
-This is the End device Type 1 THR Real Low power Arduino code and shcematics. When sleeps it only consumes 4 uA from the power source (measured at VCC = 3.3V). Both DHT11 and MRF24J40MA are powered by Arduino I/Os and are being switched on only when needed.
+This is the HobbyIoT NET End device End device THR Type 1 sensor node.
+It implements temperature and humidity sensor alongside with magnetic (reed) sensor.
+It implements ATMega328P Arduino compatible MCU together with
+802.15.4 2.4 GHz physical radio interface based on Microchip's MRF24J40MA transceiver
+Current implementation (V2) incorporates also the DHT11 temperature and humidity sensor
+ 
+Work is ongoing optimizing the powerconsumption close to the sleep current of the chips
 
-Type 1 stands for Sensor node and THR means Temperature, Humidity and Reed sensors within.
-
-The implementation is based ot MQTT-SN Specification Version 1.2. Arduino board used is Arduino Pro Mini @ 3.3 V. The 3.3V regulator has to be removed or disconnected as shown on the schematic.
-
-Topics should be predefined on the client and gateway sides and are fixed to 2 positions alpha-numeric string.
+The implementation is based ot MQTT-SN Specification Version 1.2.
+If Arduino Pro Mini @ 3.3 V is used, the 3.3V regulator has to be removed or disconnected.
+Topics should be predefined on the client and gateway sides
+and are fixed to 2 positions alpha-numeric string.
 
 Messages supported:
 
 CONNECT
-
 CONNACK
-
 PINGREQ
-
 PINGRESP
-
 PUBLISH
 
 */
