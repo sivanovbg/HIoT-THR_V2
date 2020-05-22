@@ -124,6 +124,13 @@ void setup() {
   Serial.println();
   #endif
 
+//  #ifndef DEBUG_MODE
+////  pinMode(67, INPUT_PULLUP); // 67 should be PD0 pin /UART TXI
+////  pinMode(66, INPUT_PULLUP); // 67 should be PD0 pin /UART TXI
+//  digitalWrite(66, HIGH); //    66 should be PD1 pin / UART TXO
+//                          //    according pins_arduino.h
+//  #endif
+
   attachInterrupt(0, interrupt_routine, FALLING);
 
   attachInterrupt(1, reed_routine, CHANGE);
@@ -305,9 +312,8 @@ void timed_sleep(char sleep_count) {
 
   #ifdef DEBUG_MODE
   Serial.println("Wireless module TIMED SLEEP");
-  #endif
-
   delay(10);
+  #endif
 
     mrf.write_short(MRF_SLPACK,0x48); // bits 0..6 of WAKECNT
     mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)|0x08); // bit 7 of WAKECNT = 1
@@ -322,17 +328,16 @@ void timed_sleep(char sleep_count) {
 
     mrf.write_long(MRF_MAINCNT3,mrf.read_long(MRF_MAINCNT3)|0x80); // Put MRF into timed sleep!
 
-    delay(100); // Before spi_off
+    delay(500); // Before spi_off
 
     spi_off();
 
     #ifdef DEBUG_MODE
     Serial.println("Arduino is going to SLEEP");
+    delay(5);
     #endif
 
 //    digitalWrite(9, LOW); // Test LED OFF
-
-    delay(5);
 
     LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 
@@ -370,8 +375,9 @@ void spi_off() {
 
 //  pinMode(12, INPUT); // MISO OK
 //  pinMode(SS, INPUT_PULLUP);   // CS
-//  pinMode(MOSI, INPUT); // Due leaves HIGH (MOSI)
-//  pinMode(SCK, INPUT);  // Due leaves LOW
+//  delay(100);
+//  pinMode(MOSI, INPUT_PULLUP); // Due leaves HIGH (MOSI)
+//  pinMode(SCK, INPUT_PULLUP);  // Due leaves LOW
 
   digitalWrite(SS, HIGH);
   delay(100);
