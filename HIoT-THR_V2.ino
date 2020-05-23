@@ -47,10 +47,6 @@ const int pin_interrupt = 2;
 #define DHTPIN 4
 #define DHTTYPE DHT11
 
-#define SHORT_CONNECT_INTERVAL 0x05
-#define LONG_CONNECT_INTERVAL 0x17
-#define SLEEP_INTERVAL 0xC8 // 0x05 = 15 s; 0x17 = 60 s; 0x64 = 5 min; 0xA5 = 7 min; 0xC8 = 10 min
-
 Mrf24j mrf(pin_reset, pin_cs, pin_interrupt);
 
 boolean message_received = false;
@@ -171,11 +167,12 @@ void interrupt_routine() {
 void reed_routine() {
 
   noInterrupts();
-  delay(1000);
+  delay(100);
   #ifdef DEBUG_MODE
   Serial.println("----------- REED Routine -----------");
   #endif
   mrf_wake();
+  delay(100);
   if(digitalRead(3) == 1)
   {
     #ifdef DEBUG_MODE
@@ -527,18 +524,19 @@ void exchange_data() {
   Serial.println("Sending temperature...");
   #endif
   mrf.send16(GW_ADDRESS,PUBLISH_MSGTMP,sizeof(PUBLISH_MSGTMP)); // send the temperature value
-  delay(500);
+  delay(100);
 
   #ifdef DEBUG_MODE
   Serial.println("Sending humidity...");
   #endif
   mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM)); // send the humidity value
-  delay(500);
+  delay(100);
      
   #ifdef DEBUG_MODE
   Serial.println("Sending battery voltage...");
   #endif
   mrf.send16(GW_ADDRESS,PUBLISH_MSGBAT,sizeof(PUBLISH_MSGBAT)); // send the battery value
+  delay(100);
 }
 
 void mrf_wake() {
