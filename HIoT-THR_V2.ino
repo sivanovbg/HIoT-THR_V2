@@ -192,17 +192,17 @@ void reed_routine() {
   
 //  mrf.send16(GW_ADDRESS,PUBLISH_MSGALR,sizeof(PUBLISH_MSGALR));
 
-  delay(200);  // ************************************************
+  delay(200);
   interrupts();
   timed_sleep(SHORT_CONNECT_INTERVAL);
 }
-
+// *************** MAIN LOOP STARTS HERE ***************
 void loop() {
   
   if(node_connected == true) {
     
     connect_timer = 4;
-    send_pingreq();
+    exchange_keepalive();
     exchange_data();
     timed_sleep(SLEEP_INTERVAL);
   }
@@ -235,9 +235,9 @@ void loop() {
     #endif
     node_connected = false;
   }
-  
- 
 }
+
+// *************** MAIN LOOP ENDS HERE ***************
 
 void get_connected() {
 
@@ -261,19 +261,19 @@ void get_connected() {
         Msg.Var[i-2] = rx_buffer[i];
     }
 
-  if(Msg.MsgType == CONNACK) {
-    #ifdef DEBUG_MODE
-    Serial.println("CONNACK received. Connected");
-    #endif
-    message_received = false;
-    node_connected = true;
-    connection_timeout = false;
-    timeout_timer = 3;
+    if(Msg.MsgType == CONNACK) {
+     #ifdef DEBUG_MODE
+      Serial.println("CONNACK received. Connected");
+      #endif
+      message_received = false;
+      node_connected = true;
+      connection_timeout = false;
+      timeout_timer = 3;
    }
   }
 }
 
-void send_pingreq() {
+void exchange_keepalive() {
 
   int i;
         
@@ -286,23 +286,25 @@ void send_pingreq() {
 
    mrf.check_flags(&handle_rx, &handle_tx);
 
-    if(message_received) {
-        Msg.Length = rx_buffer[0];  // Fill in the message fields
-      Msg.MsgType = rx_buffer[1];
-      for(i=2;i<Msg.Length;i++) {
-          Msg.Var[i-2] = rx_buffer[i];
-      }
+   if(message_received) {
+     Msg.Length = rx_buffer[0];  // Fill in the message fields
+     Msg.MsgType = rx_buffer[1];
+     for(i=2;i<Msg.Length;i++) {
+      Msg.Var[i-2] = rx_buffer[i];
+     }
 
-  if(Msg.MsgType == PINGRESP) {
-    #ifdef DEBUG_MODE
-    Serial.println("PINGRESP received");
-    #endif
-    message_received = false;
-    connection_timeout = false;
-    timeout_timer = 3;
-  }
+     if(Msg.MsgType == PINGRESP) {
+        #ifdef DEBUG_MODE
+        Serial.println("PINGRESP received");
+        #endif
+        message_received = false;
+        connection_timeout = false;
+        timeout_timer = 3;
+     }
  }
- timeout_timer--;
+ else {
+      timeout_timer--;   
+ }
 }
 
 void timed_sleep(char sleep_count) {
@@ -336,11 +338,15 @@ void timed_sleep(char sleep_count) {
 
 //    digitalWrite(9, LOW); // Test LED OFF
 
+    delay(500); // SPI OFF to Arduino OFF
+
     LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 
     // Sistem will sleep until MRF counts down the desired sleep period
     // and wakes the Arduino MCU module after that
 
+    delay(100); // To wake up slowly :)
+    
     mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear the interrupt
 
     #ifdef DEBUG_MODE
@@ -383,6 +389,7 @@ void spi_off() {
   
   #ifdef DEBUG_MODE
   Serial.println("SPI interface OFF");
+  delay(5);
   #endif
   
 }
@@ -393,6 +400,7 @@ void spi_on() {
   pinMode(SS, OUTPUT);   // CS
   pinMode(MOSI, OUTPUT); // Due leaves HIGH (MOSI)
   pinMode(SCK, OUTPUT);  // Due leaves LOW
+  delay(100);
   mrf_init();
   #ifdef DEBUG_MODE
   Serial.println("SPI interface ON (w/mrf_init)");
