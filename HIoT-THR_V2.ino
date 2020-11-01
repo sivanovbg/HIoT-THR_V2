@@ -29,23 +29,38 @@ PUBLISH
 
 */
 
-//#define DEBUG_MODE
+#define DEBUG_MODE
+#define BMP280
+//#define DHT11
 
 #include "HIoT-THR_Cfg-homes.h"
 #include <SPI.h>
 #include <mrf24j.h>   // *** Please use the modified library found within the same repo on GitHub ***
+
+#ifdef DHT11
 #include "DHT.h"
+#endif
+
+#ifdef BMP280
+#include <Wire.h>
+#include <Adafruit_BMP280.h>
+#endif
+
+
 #include "LowPower.h"
 
 const int pin_reset = 6;
 const int pin_cs = 10;
 const int pin_interrupt = 2;
 
-#define DHTPWR 8
 #define LED 7
 
+#ifdef DHT11
+#define DHTPWR 8
 #define DHTPIN 4
 #define DHTTYPE DHT11
+#endif
+
 
 Mrf24j mrf(pin_reset, pin_cs, pin_interrupt);
 
@@ -104,7 +119,13 @@ Message Msg;
 #define PUBACK    0x0D
 #define SUBACK    0x13
 
+#ifdef DTH11
 DHT dht(DHTPIN, DHTTYPE);
+#endif
+
+#ifdef BMP280
+Adafruit_BMP280 bmp; // I2C
+#endif
 
 void setup() { 
 
@@ -135,9 +156,10 @@ void setup() {
 //  pinMode(2,INPUT); // define input for MRF24J40 interrupt, PU is external
   pinMode(3,INPUT); // define input for reed sensor, PU is external
 
+  #ifdef DHT11
   pinMode(DHTPWR, OUTPUT); // power for DHT11 OK
-
   digitalWrite(DHTPWR, HIGH);  // DHT11 Power on
+  #endif
   
 //  pinMode(9, OUTPUT); // power for MRF24J40MA Not used
 
@@ -146,11 +168,20 @@ void setup() {
   
   interrupts();
 
+  #ifdef DHT11
   dht.begin();
-
   pinMode(DHTPIN, INPUT); // remove DHTPIN internal pull up to save power
-
 //  dht_off(); // switch off DHT11
+  #endif
+
+  #ifdef BMP280
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
+  bmp.begin();
+  #endif
 
   mrf_init();
 
@@ -359,6 +390,7 @@ void timed_sleep(char sleep_count) {
     
 }
 
+#ifdef DHT11
 void dht_off() {
       digitalWrite(DHTPWR, LOW);  // DHT11 Power off
 //      pinMode(DHTPIN, INPUT); // set to only Imput to remove the internal pull up
@@ -373,6 +405,7 @@ void dht_on() {
       Serial.println("DHT11 Power ON");
       #endif
 }
+#endif
 
 void spi_off() {
 
@@ -479,15 +512,30 @@ void exchange_data() {
   int i;
 
   mrf_sleep();
+  
+  #ifdef DHT11
   dht_on();
+  #endif
   
   #ifdef DEBUG_MODE
   Serial.println("Reading temperature...");
   #endif
+
+  #ifdef BMP280
+  temperature = bmp.readTemperature();
+  #endif
+  
+  #ifdef DHT11
   temperature = dht.readTemperature(); // get the current temperature
                                            // and prepare the MQTT-SN message
-  dtostrf(temperature,0,0,temperature_string);
+  #endif
+                                             
+  dtostrf(temperature,4,2,temperature_string);
   uint8_t tmp_len = strlen(temperature_string);
+  
+  #ifdef DEBUG_MODE
+  Serial.println(bmp.readTemperature());
+  #endif
 
   for(i=0;i<tmp_len;i++) {
     PUBLISH_MSGTMP[i+7] = temperature_string[i];
@@ -498,9 +546,18 @@ void exchange_data() {
   #ifdef DEBUG_MODE
   Serial.println("Reading humidity...");
   #endif
-  humidity = dht.readHumidity(); // get the current humidity
 
+  #ifdef BMP280
+  //humidity = bmp.readHumidity();
+  #endif
+  
+  #ifdef DHT11
+  humidity = dht.readHumidity(); // get the current humidity
+  #endif
+
+  #ifdef DHT11
   dht_off();
+  #endif
                                            // and prepare the MQTT-SN message
   dtostrf(humidity,0,0,humidity_string);
   uint8_t hum_len = strlen(humidity_string);
