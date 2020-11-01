@@ -31,7 +31,7 @@ PUBLISH
 
 //#define DEBUG_MODE
 
-#include "HIoT-THR_Cfg-HomeS.h"
+#include "HIoT-THR_Cfg-homes.h"
 #include <SPI.h>
 #include <mrf24j.h>   // *** Please use the modified library found within the same repo on GitHub ***
 #include "DHT.h"
@@ -109,7 +109,7 @@ DHT dht(DHTPIN, DHTTYPE);
 void setup() { 
 
   #ifdef DEBUG_MODE
-  Serial.begin(115200);
+  Serial.begin(19200);
 
   Serial.println();
   Serial.println("|HobbyIoT Sensor node Type 1 THR|");
