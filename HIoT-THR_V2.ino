@@ -33,7 +33,7 @@ PUBLISH
 #define BMP280
 //#define DHT11
 
-#include "HIoT-THR_Cfg-homes.h"
+#include "HIoT-THR_Cfg-template.h"
 #include <SPI.h>
 #include <mrf24j.h>   // *** Please use the modified library found within the same repo on GitHub ***
 
@@ -76,7 +76,7 @@ float temperature;
 float humidity;
 long batt_value;
 
-uint8_t temperature_string[10] = "24.00";
+char temperature_string[10];
 uint8_t humidity_string[10];
 uint8_t batt_value_string[10];
 
@@ -93,8 +93,8 @@ uint8_t PINGREQ_MSG[] = { 0x0A, 0x16, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, OWN_A_
 
 uint8_t PUBLISH_MSGON[] = { 0x0B, 0x0C, 0x00, 'o', msg_n, OWN_A_MSB, 0x96, ' ', 'R', 'E', 'D' };
 uint8_t PUBLISH_MSGOFF[] = { 0x0B, 0x0C, 0x00, 'o', msg_n, OWN_A_MSB, 0x96, 'D', 'a', 'r', 'k' };
-uint8_t PUBLISH_MSGTMP[] = { 0x0C, 0x0C, 0x00, 't', msg_n, OWN_A_MSB, 0x96, '-', '-', '-', '-', '-' };
-uint8_t PUBLISH_MSGHUM[] = { 0x0C, 0x0C, 0x00, 'h', msg_n, OWN_A_MSB, 0x96, '-', '-', '-', '-', '-' };
+uint8_t PUBLISH_MSGTMP[] = { 0x0C, 0x0C, 0x00, 't', msg_n, OWN_A_MSB, 0x96, '-', '-', '-', '-', '-', '-' };
+uint8_t PUBLISH_MSGHUM[] = { 0x0C, 0x0C, 0x00, 'h', msg_n, OWN_A_MSB, 0x96, '-', '-', '-', '-', '-', '-' };
 
 uint8_t PUBLISH_MSGALR[] = { 0x0C, 0x0C, 0x00, 'r', msg_n, OWN_A_MSB, 0x96, 'A', 'L', 'E', 'R', 'T' };
 uint8_t PUBLISH_MSGOPN[] = { 0x0C, 0x0C, 0x00, 'r', msg_n, OWN_A_MSB, 0x96, 'O', 'P', 'E', 'N', ' ' };
@@ -119,7 +119,7 @@ Message Msg;
 #define PUBACK    0x0D
 #define SUBACK    0x13
 
-#ifdef DTH11
+#ifdef DHT11
 DHT dht(DHTPIN, DHTTYPE);
 #endif
 
@@ -398,7 +398,9 @@ void dht_off() {
       Serial.println("DHT11 Power OFF");
       #endif
 }
+#endif
 
+#ifdef DHT11
 void dht_on() {
       digitalWrite(DHTPWR, HIGH);  // DHT11 Power on
       #ifdef DEBUG_MODE
@@ -530,11 +532,11 @@ void exchange_data() {
                                            // and prepare the MQTT-SN message
   #endif
                                              
-  dtostrf(temperature,4,2,temperature_string);
+  dtostrf(temperature,5,2,temperature_string);
   uint8_t tmp_len = strlen(temperature_string);
   
   #ifdef DEBUG_MODE
-  Serial.println(bmp.readTemperature());
+  Serial.println(temperature);
   #endif
 
   for(i=0;i<tmp_len;i++) {
