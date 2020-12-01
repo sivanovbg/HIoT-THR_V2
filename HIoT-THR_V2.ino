@@ -227,6 +227,8 @@ void reed_routine() {
   interrupts();
   timed_sleep(SHORT_CONNECT_INTERVAL);
 }
+
+
 // *************** MAIN LOOP STARTS HERE ***************
 void loop() {
   
@@ -235,6 +237,7 @@ void loop() {
     connect_timer = 4;
     exchange_keepalive();
     exchange_data();
+//    Serial.println("Waiting for 15 s ........................................"); delay(15000);
     timed_sleep(SLEEP_INTERVAL);
   }
   else {
@@ -248,14 +251,16 @@ void loop() {
         #ifdef DEBUG_MODE
         Serial.println("Waiting for SHORT connect interval");
         #endif
-        timed_sleep(SHORT_CONNECT_INTERVAL);        
+        delay(10000);
+//        timed_sleep(SHORT_CONNECT_INTERVAL);        
       }
 
       else {
         #ifdef DEBUG_MODE
         Serial.println("Waiting for LONG connect interval");
         #endif
-        timed_sleep(LONG_CONNECT_INTERVAL);
+        delay(60000);
+//        timed_sleep(LONG_CONNECT_INTERVAL);
       }
     }
   }
@@ -270,6 +275,7 @@ void loop() {
 
 // *************** MAIN LOOP ENDS HERE ***************
 
+
 void get_connected() {
 
   int i;
@@ -280,7 +286,7 @@ void get_connected() {
 
   mrf.send16(GW_ADDRESS,CONNECT_MSG,sizeof(CONNECT_MSG));
 
-  delay(100);
+  delay(300);
   
   mrf.check_flags(&handle_rx, &handle_tx);
   
@@ -301,28 +307,43 @@ void get_connected() {
       connection_timeout = false;
       timeout_timer = 3;
    }
+   else
+   {
+      timeout_timer--;
+   }
   }
 }
 
 void exchange_keepalive() {
 
-  int i;
+  int i, current_time, last_time, period = 1000;
+      
+    #ifdef DEBUG_MODE
+    Serial.print("Sending PINGREQ...");
+    #endif
+    mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
+    current_time = last_time = millis();
+    
+    while(!message_received) {
+      
+      mrf.check_flags(&handle_rx, &handle_tx);
+      current_time = millis();
         
-  #ifdef DEBUG_MODE
-  Serial.println("Sending PINGREQ");
-  #endif
-  mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
-  
-  delay(100);
-
-   mrf.check_flags(&handle_rx, &handle_tx);
-
-   if(message_received) {
-     Msg.Length = rx_buffer[0];  // Fill in the message fields
-     Msg.MsgType = rx_buffer[1];
-     for(i=2;i<Msg.Length;i++) {
-      Msg.Var[i-2] = rx_buffer[i];
-     }
+      if((current_time - last_time) > period) {
+        #ifdef DEBUG_MODE
+        Serial.print("Sending PINGREQ again ...");
+        #endif
+        mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
+        last_time = millis();
+      }
+      
+  }
+   
+   Msg.Length = rx_buffer[0];  // Fill in the message fields
+   Msg.MsgType = rx_buffer[1];
+   for(i=2;i<Msg.Length;i++) {
+    Msg.Var[i-2] = rx_buffer[i];
+   }
 
      if(Msg.MsgType == PINGRESP) {
         #ifdef DEBUG_MODE
@@ -332,10 +353,10 @@ void exchange_keepalive() {
         connection_timeout = false;
         timeout_timer = 3;
      }
- }
- else {
+      else
+     {
       timeout_timer--;   
- }
+     }
 }
 
 void timed_sleep(char sleep_count) {
@@ -344,6 +365,8 @@ void timed_sleep(char sleep_count) {
   Serial.println("Wireless module TIMED SLEEP");
   delay(10);
   #endif
+
+    noInterrupts();
 
     mrf.write_short(MRF_SLPACK,0x48); // bits 0..6 of WAKECNT
     mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)|0x08); // bit 7 of WAKECNT = 1
@@ -358,18 +381,20 @@ void timed_sleep(char sleep_count) {
 
     mrf.write_long(MRF_MAINCNT3,mrf.read_long(MRF_MAINCNT3)|0x80); // Put MRF into timed sleep!
 
-    delay(500); // Before spi_off
+//    delay(100); // Before spi_off
+//    spi_off();
+//    delay(100); // SPI OFF to Arduino OFF
 
-    spi_off();
+//    delay(1000);
 
+    interrupts();
+    
     #ifdef DEBUG_MODE
     Serial.println("Arduino is going to SLEEP");
-    delay(5);
+    delay(50);
     #endif
 
 //    digitalWrite(9, LOW); // Test LED OFF
-
-    delay(500); // SPI OFF to Arduino OFF
 
     LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 
@@ -386,7 +411,9 @@ void timed_sleep(char sleep_count) {
 
 //    digitalWrite(9, HIGH); // Test LED ON
     
-    spi_on();
+//    spi_on();
+
+//    mrf_init();
     
 }
 
@@ -411,16 +438,16 @@ void dht_on() {
 
 void spi_off() {
 
-//  pinMode(12, INPUT); // MISO OK
-//  pinMode(SS, INPUT_PULLUP);   // CS
-//  delay(100);
-//  pinMode(MOSI, INPUT_PULLUP); // Due leaves HIGH (MOSI)
-//  pinMode(SCK, INPUT_PULLUP);  // Due leaves LOW
-
-  digitalWrite(SS, HIGH);
+  pinMode(12, INPUT); // MISO OK
+  pinMode(SS, INPUT_PULLUP);   // CS
   delay(100);
-  digitalWrite(MOSI, HIGH);
-  digitalWrite(SCK, HIGH);
+  pinMode(MOSI, INPUT_PULLUP); // Due leaves HIGH (MOSI)
+  pinMode(SCK, INPUT_PULLUP);  // Due leaves LOW
+
+//  digitalWrite(SS, HIGH);
+//  delay(100);
+//  digitalWrite(MOSI, HIGH);
+//  digitalWrite(SCK, HIGH);
   
   #ifdef DEBUG_MODE
   Serial.println("SPI interface OFF");
@@ -436,7 +463,7 @@ void spi_on() {
   pinMode(MOSI, OUTPUT); // Due leaves HIGH (MOSI)
   pinMode(SCK, OUTPUT);  // Due leaves LOW
   delay(100);
-  mrf_init();
+
   #ifdef DEBUG_MODE
   Serial.println("SPI interface ON (w/mrf_init)");
   #endif
@@ -498,20 +525,33 @@ void handle_rx() {
           rx_buffer[i] = mrf.get_rxinfo()->rx_data[i];
     }
 //    client_address = rx_buffer[7];
+
+//    mrf.read_short(MRF_INTSTAT);
+    
     message_received = true;
 }
 
-void handle_tx() {
-//    if (mrf.get_txinfo()->tx_ok) {
-//        Serial.println("802.15.4 TX went ok, got ack");
-//    } else {
-//        Serial.print("802.15.4 TX failed after ");Serial.print(mrf.get_txinfo()->retries);Serial.println(" retries\n");
-//    }
+boolean handle_tx() {
+    if (mrf.get_txinfo()->tx_ok) {
+
+        #ifdef DEBUG_MODE 
+        Serial.println("802.15.4 TX went ok, got ack");
+        #endif
+        return(true);
+    } else {
+        #ifdef DEBUG_MODE
+        Serial.print("802.15.4 TX failed after ");Serial.print(mrf.get_txinfo()->retries);Serial.println(" retries");
+//        Serial.println("Restart and init MRF");
+        #endif
+//        mrf.reset();
+//        mrf.init();
+        return(false);
+    }
 }
 
 void exchange_data() {
   
-  int i;
+  int i, current_time, last_time, period = 1000;
 
   mrf_sleep();
   
@@ -535,9 +575,9 @@ void exchange_data() {
   dtostrf(temperature,5,2,temperature_string);
   uint8_t tmp_len = strlen(temperature_string);
   
-  #ifdef DEBUG_MODE
-  Serial.println(temperature);
-  #endif
+//  #ifdef DEBUG_MODE
+//  Serial.println(temperature);
+//  #endif
 
   for(i=0;i<tmp_len;i++) {
     PUBLISH_MSGTMP[i+7] = temperature_string[i];
@@ -587,23 +627,73 @@ void exchange_data() {
       
   mrf_wake();               // Ready for sending, powering the MRF on.
 
-  #ifdef DEBUG_MODE
-  Serial.println("Sending temperature...");
-  #endif
-  mrf.send16(GW_ADDRESS,PUBLISH_MSGTMP,sizeof(PUBLISH_MSGTMP)); // send the temperature value
-  delay(100);
+  delay(1000);
 
   #ifdef DEBUG_MODE
-  Serial.println("Sending humidity...");
+  Serial.print("Sending temperature...");
   #endif
-  mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM)); // send the humidity value
-  delay(100);
-     
+  mrf.send16(GW_ADDRESS,PUBLISH_MSGTMP,sizeof(PUBLISH_MSGTMP));
+
+  current_time = last_time = millis();
+
+  while(!handle_tx()) {
+    current_time = millis();
+    if((current_time - last_time) > period) {
+      #ifdef DEBUG_MODE
+      Serial.print("Sending temperature again...");
+      #endif
+      mrf.send16(GW_ADDRESS,PUBLISH_MSGTMP,sizeof(PUBLISH_MSGTMP)); // send the temperature value again
+      last_time = millis();
+    }
+  }
+
+//  mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear the interrupt
+
+  delay(10);
+
+//  while(mrf.get_txinfo()->channel_busy) {
+//    Serial.println(" --- channel busy - waiting... ---");
+//    delay(1000);
+//  }  
+
   #ifdef DEBUG_MODE
-  Serial.println("Sending battery voltage...");
+  Serial.print("Sending humidity...");
   #endif
-  mrf.send16(GW_ADDRESS,PUBLISH_MSGBAT,sizeof(PUBLISH_MSGBAT)); // send the battery value
-  delay(100);
+
+  mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM));  
+
+  current_time = last_time = millis();
+
+  while(!handle_tx()) {
+    current_time = millis();
+    if((current_time - last_time) > period) {
+      #ifdef DEBUG_MODE
+      Serial.print("Sending humidity again...");
+      #endif
+      mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM)); // send the humidity value again
+      last_time = millis();
+    }
+  }
+//
+  delay(10);
+
+  #ifdef DEBUG_MODE
+  Serial.print("Sending battery voltage...");
+  #endif
+  mrf.send16(GW_ADDRESS,PUBLISH_MSGBAT,sizeof(PUBLISH_MSGBAT));
+  current_time = last_time = millis();
+
+  while(!handle_tx()) {
+    current_time = millis();
+    if((current_time - last_time) > period) {
+      #ifdef DEBUG_MODE
+      Serial.print("Sending battery voltage again...");
+      #endif
+      mrf.send16(GW_ADDRESS,PUBLISH_MSGBAT,sizeof(PUBLISH_MSGBAT)); // send the battery value again
+      last_time = millis();
+    }
+  }
+  delay(10);
 }
 
 void mrf_wake() {
@@ -618,7 +708,9 @@ void mrf_wake() {
   delay(10);
   mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)&0xFB); // RF State mashine release
 
-  delay(100); // 20 ms shoud be enough...
+  delay(100); // 20 ms should be enough...
+
+  mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear the interrupt
 
   #ifdef DEBUG_MODE
   Serial.println("Wireless module is ON");
