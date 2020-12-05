@@ -29,8 +29,8 @@ PUBLISH
 
 */
 
-#define DEBUG_MODE
-#define BMP280
+//#define DEBUG_MODE
+//#define BMP280
 //#define DHT11
 
 #include "HIoT-THR_Cfg-template.h"
@@ -148,13 +148,13 @@ void setup() {
 //                          //    according pins_arduino.h
 //  #endif
 
+//  pinMode(2,INPUT_PULLUP); // define input for MRF24J40 interrupt, PU is internal
+  pinMode(2,INPUT); // define input for MRF24J40 interrupt, PU is external
+  pinMode(3,INPUT); // define input for reed sensor, PU is external
+
   attachInterrupt(0, interrupt_routine, FALLING);
 
   attachInterrupt(1, reed_routine, CHANGE);
-
-  pinMode(2,INPUT_PULLUP); // define input for MRF24J40 interrupt, PU is internal
-//  pinMode(2,INPUT); // define input for MRF24J40 interrupt, PU is external
-  pinMode(3,INPUT); // define input for reed sensor, PU is external
 
   #ifdef DHT11
   pinMode(DHTPWR, OUTPUT); // power for DHT11 OK
@@ -189,7 +189,7 @@ void setup() {
 
 void interrupt_routine() {
 
-    delay(200);
+//    delay(200);
     mrf.interrupt_handler(); // mrf24 object interrupt routine
 
 //    pinMode(pin_led,OUTPUT);
@@ -338,6 +338,8 @@ void exchange_keepalive() {
       }
       
   }
+
+  mrf_sleep();
    
    Msg.Length = rx_buffer[0];  // Fill in the message fields
    Msg.MsgType = rx_buffer[1];
@@ -379,16 +381,18 @@ void timed_sleep(char sleep_count) {
     mrf.write_long(MRF_MAINCNT2,sleep_count); // 0x05 = 15 s; 0x17 = 60 s; 0x64 = 5 min; 0xA5 = 7 min; 0xC8 = 10 min?
     mrf.write_long(MRF_MAINCNT3,0x00);
 
+//    delay(100);
+
     mrf.write_long(MRF_MAINCNT3,mrf.read_long(MRF_MAINCNT3)|0x80); // Put MRF into timed sleep!
 
 //    delay(100); // Before spi_off
 //    spi_off();
 //    delay(100); // SPI OFF to Arduino OFF
 
-//    delay(1000);
+//    delay(100);
+//
+//    interrupts();
 
-    interrupts();
-    
     #ifdef DEBUG_MODE
     Serial.println("Arduino is going to SLEEP");
     delay(50);
@@ -553,7 +557,7 @@ void exchange_data() {
   
   int i, current_time, last_time, period = 1000;
 
-  mrf_sleep();
+//  mrf_sleep();
   
   #ifdef DHT11
   dht_on();
@@ -627,7 +631,7 @@ void exchange_data() {
       
   mrf_wake();               // Ready for sending, powering the MRF on.
 
-  delay(1000);
+//  delay(1000);
 
   #ifdef DEBUG_MODE
   Serial.print("Sending temperature...");
