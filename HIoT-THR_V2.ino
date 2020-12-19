@@ -29,7 +29,7 @@ PUBLISH
 
 */
 
-#include "HIoT-THR_Cfg-homes.h"
+#include "HIoT-THR_Cfg-template.h"
 #include <SPI.h>
 #include <mrf24j.h>   // *** Please use the modified library found within the same repo on GitHub ***
 
