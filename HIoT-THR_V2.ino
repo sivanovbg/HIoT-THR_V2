@@ -29,11 +29,7 @@ PUBLISH
 
 */
 
-//#define DEBUG_MODE
-//#define BMP280
-//#define DHT11
-
-#include "HIoT-THR_Cfg-template.h"
+#include "HIoT-THR_Cfg-homes.h"
 #include <SPI.h>
 #include <mrf24j.h>   // *** Please use the modified library found within the same repo on GitHub ***
 
@@ -225,20 +221,66 @@ void reed_routine() {
 
   delay(200);
   interrupts();
-  timed_sleep(SHORT_CONNECT_INTERVAL);
+//  timed_sleep(SHORT_CONNECT_INTERVAL);
 }
 
 
 // *************** MAIN LOOP STARTS HERE ***************
 void loop() {
+
+  uint8_t sleep_count;
   
   if(node_connected == true) {
     
     connect_timer = 4;
     exchange_keepalive();
+    mrf_sleep();
     exchange_data();
 //    Serial.println("Waiting for 15 s ........................................"); delay(15000);
-    timed_sleep(SLEEP_INTERVAL);
+//    timed_sleep(SLEEP_INTERVAL);
+
+//    mrf_sleep();
+//    sleep_count=7;
+//    while(sleep_count--) {
+//      LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+//    }
+//    mrf_wake();
+
+    #ifdef DEBUG_MODE
+    Serial.println("Wireless module TIMED SLEEP");
+    delay(10);
+    #endif
+
+    #ifdef DEBUG_MODE
+    Serial.println("Arduino is going to SLEEP");
+    delay(50);
+    #endif
+    
+    #ifdef DEBUG_MODE
+    Serial.println("Initializing befire sleeping......................");
+    Serial.println("Initialize done......................");
+    #endif
+
+    mrf_init();
+    mrf.write_long(MRF_MAINCNT3,mrf.read_long(MRF_MAINCNT3)|0x80); // Put MRF into timed sleep!
+
+//    delay(200);
+
+    LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
+
+    // Sistem will sleep until MRF counts down the desired sleep period
+    // and wakes the Arduino MCU module after that
+
+    //delay(20);
+ 
+    mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear the interrupt
+
+    
+
+    #ifdef DEBUG_MODE
+    Serial.println("System wakes up");
+    #endif
+
   }
   else {
     get_connected();
@@ -254,7 +296,6 @@ void loop() {
         delay(10000);
 //        timed_sleep(SHORT_CONNECT_INTERVAL);        
       }
-
       else {
         #ifdef DEBUG_MODE
         Serial.println("Waiting for LONG connect interval");
@@ -263,13 +304,14 @@ void loop() {
 //        timed_sleep(LONG_CONNECT_INTERVAL);
       }
     }
-  }
-
-  if(timeout_timer == 0) {
-    #ifdef DEBUG_MODE
-    Serial.println("Connection timeout ...");
-    #endif
-    node_connected = false;
+    else {
+      if(timeout_timer == 0) {
+      #ifdef DEBUG_MODE
+      Serial.println("Connection timeout ...");
+      #endif
+      node_connected = false;
+      }
+    }
   }
 }
 
@@ -317,48 +359,50 @@ void get_connected() {
 void exchange_keepalive() {
 
   int i, current_time, last_time, period = 1000;
-      
+         
     #ifdef DEBUG_MODE
     Serial.print("Sending PINGREQ...");
     #endif
     mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
-    current_time = last_time = millis();
+
+
+//    current_time = last_time = millis();
     
-    while(!message_received) {
-      
-      mrf.check_flags(&handle_rx, &handle_tx);
-      current_time = millis();
-        
-      if((current_time - last_time) > period) {
-        #ifdef DEBUG_MODE
-        Serial.print("Sending PINGREQ again ...");
-        #endif
-        mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
-        last_time = millis();
-      }
-      
-  }
+//    while(!message_received) {
+//      
+//      mrf.check_flags(&handle_rx, &handle_tx);
+//      current_time = millis();
+//        
+//      if((current_time - last_time) > period) {
+//        #ifdef DEBUG_MODE
+//        Serial.print("Sending PINGREQ again ...");
+//        #endif
+//        mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
+//        last_time = millis();
+//      }
+//      
+//  }
+//
 
-  mrf_sleep();
-   
-   Msg.Length = rx_buffer[0];  // Fill in the message fields
-   Msg.MsgType = rx_buffer[1];
-   for(i=2;i<Msg.Length;i++) {
-    Msg.Var[i-2] = rx_buffer[i];
-   }
-
-     if(Msg.MsgType == PINGRESP) {
-        #ifdef DEBUG_MODE
-        Serial.println("PINGRESP received");
-        #endif
-        message_received = false;
-        connection_timeout = false;
-        timeout_timer = 3;
-     }
-      else
-     {
-      timeout_timer--;   
-     }
+//   
+//   Msg.Length = rx_buffer[0];  // Fill in the message fields
+//   Msg.MsgType = rx_buffer[1];
+//   for(i=2;i<Msg.Length;i++) {
+//    Msg.Var[i-2] = rx_buffer[i];
+//   }
+//
+//     if(Msg.MsgType == PINGRESP) {
+//        #ifdef DEBUG_MODE
+//        Serial.println("PINGRESP received");
+//        #endif
+//        message_received = false;
+//        connection_timeout = false;
+//        timeout_timer = 3;
+//     }
+//      else
+//     {
+//      timeout_timer--;   
+//     }
 }
 
 void timed_sleep(char sleep_count) {
@@ -370,16 +414,16 @@ void timed_sleep(char sleep_count) {
 
     noInterrupts();
 
-    mrf.write_short(MRF_SLPACK,0x48); // bits 0..6 of WAKECNT
-    mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)|0x08); // bit 7 of WAKECNT = 1
-    mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)&0xEF); // bit 8 of WAKECNT = 0
-
-  // 6. Set MAINCNT value and put MRF into sleep mode
-  // Will sleep for 60 s: MAINCNT = 0x005B8D80
-    mrf.write_long(MRF_MAINCNT0,0x80);
-    mrf.write_long(MRF_MAINCNT1,0x8D);
-    mrf.write_long(MRF_MAINCNT2,sleep_count); // 0x05 = 15 s; 0x17 = 60 s; 0x64 = 5 min; 0xA5 = 7 min; 0xC8 = 10 min?
-    mrf.write_long(MRF_MAINCNT3,0x00);
+//    mrf.write_short(MRF_SLPACK,0x48); // bits 0..6 of WAKECNT
+//    mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)|0x08); // bit 7 of WAKECNT = 1
+//    mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)&0xEF); // bit 8 of WAKECNT = 0
+//
+//  // 6. Set MAINCNT value and put MRF into sleep mode
+//  // Will sleep for 60 s: MAINCNT = 0x005B8D80
+//    mrf.write_long(MRF_MAINCNT0,0x80);
+//    mrf.write_long(MRF_MAINCNT1,0x8D);
+//    mrf.write_long(MRF_MAINCNT2,sleep_count); // 0x05 = 15 s; 0x17 = 60 s; 0x64 = 5 min; 0xA5 = 7 min; 0xC8 = 10 min?
+//    mrf.write_long(MRF_MAINCNT3,0x00);
 
 //    delay(100);
 
@@ -391,7 +435,7 @@ void timed_sleep(char sleep_count) {
 
 //    delay(100);
 //
-//    interrupts();
+    interrupts();
 
     #ifdef DEBUG_MODE
     Serial.println("Arduino is going to SLEEP");
@@ -502,7 +546,7 @@ void mrf_init() {
   // Must be initial settings...
   
   // 1. Select 100 KHz internal oscillator (default setting) by clearing SLPCLKEN bit
-  //  mrf.write_long(MRF_SLPCON0,mrf.read_long(MRF_SLPCON0)&0xFE);
+  mrf.write_long(MRF_SLPCON0,mrf.read_long(MRF_SLPCON0)&0xFE);
   //  delay(10);
   
   // 2. Initialize SLPCLKSEL = 0x2 (100 kHz Internal oscillator)
@@ -511,12 +555,28 @@ void mrf_init() {
   // 3. Set CLKOUTEN = 1 and SLPCLKDIV = 0x01 done during MRF init phase
 
   // 3.5 Calibrate
-  //    mrf.write_long(MRF_SLPCAL2,mrf.read_long(MRF_SLPCAL2)&0x10);
-  //    delay(1000);
+  mrf.write_long(MRF_SLPCAL2,mrf.read_long(MRF_SLPCAL2)&0x10);
+
+  while(!mrf.read_long(MRF_SLPCAL2)&0x80);
+  #ifdef DEBUG_MODE
+  Serial.println("MRF Counter calibrate OK");
+  #endif
 
   // 4. Set the WAKETIME to 0x0D2 -> 2.1 ms
     mrf.write_long(MRF_WAKETIMEL,0xD2);
     mrf.write_long(MRF_WAKETIMEH,0x00);    
+
+        mrf.write_short(MRF_SLPACK,0x48); // bits 0..6 of WAKECNT
+    mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)|0x08); // bit 7 of WAKECNT = 1
+    mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)&0xEF); // bit 8 of WAKECNT = 0
+
+  // 6. Set MAINCNT value and put MRF into sleep mode
+  // Will sleep for 60 s: MAINCNT = 0x005B8D80
+    mrf.write_long(MRF_MAINCNT0,0x80);
+    mrf.write_long(MRF_MAINCNT1,0x8D);
+    mrf.write_long(MRF_MAINCNT2,SLEEP_INTERVAL); // 0x05 = 15 s; 0x17 = 60 s; 0x64 = 5 min; 0xA5 = 7 min; 0xC8 = 10 min?
+    mrf.write_long(MRF_MAINCNT3,0x00);
+
 }
 
 void handle_rx() {
@@ -556,8 +616,7 @@ boolean handle_tx() {
 void exchange_data() {
   
   int i, current_time, last_time, period = 1000;
-
-//  mrf_sleep();
+  boolean ack = false;
   
   #ifdef DHT11
   dht_on();
@@ -631,90 +690,76 @@ void exchange_data() {
       
   mrf_wake();               // Ready for sending, powering the MRF on.
 
-//  delay(1000);
+  delay(20);
 
   #ifdef DEBUG_MODE
-  Serial.print("Sending temperature...");
+  Serial.println("Sending temperature...");
   #endif
   mrf.send16(GW_ADDRESS,PUBLISH_MSGTMP,sizeof(PUBLISH_MSGTMP));
-
-  current_time = last_time = millis();
-
-  while(!handle_tx()) {
-    current_time = millis();
-    if((current_time - last_time) > period) {
-      #ifdef DEBUG_MODE
-      Serial.print("Sending temperature again...");
-      #endif
-      mrf.send16(GW_ADDRESS,PUBLISH_MSGTMP,sizeof(PUBLISH_MSGTMP)); // send the temperature value again
-      last_time = millis();
-    }
-  }
-
-//  mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear the interrupt
-
-  delay(10);
-
-//  while(mrf.get_txinfo()->channel_busy) {
-//    Serial.println(" --- channel busy - waiting... ---");
-//    delay(1000);
-//  }  
-
-  #ifdef DEBUG_MODE
-  Serial.print("Sending humidity...");
-  #endif
-
-  mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM));  
-
-  current_time = last_time = millis();
-
-  while(!handle_tx()) {
-    current_time = millis();
-    if((current_time - last_time) > period) {
-      #ifdef DEBUG_MODE
-      Serial.print("Sending humidity again...");
-      #endif
-      mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM)); // send the humidity value again
-      last_time = millis();
-    }
-  }
+//  current_time = last_time = millis();
 //
-  delay(10);
+//  while(!handle_tx()) {
+////    ack = handle_tx(); // TRY moving this line after last_time = ...
+//    current_time = millis();
+//    if(current_time - last_time > period) {
+//      mrf.send16(GW_ADDRESS,PUBLISH_MSGTMP,sizeof(PUBLISH_MSGTMP));
+//      last_time = millis();
+//    }
+//  }
+
+  delay(20);
+  
+  #ifdef DEBUG_MODE
+  Serial.println("Sending humidity...");
+  #endif
+  mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM));
+//  current_time = last_time = millis();
+////  ack = handle_tx();
+//
+//  while(!handle_tx()) {
+////    ack = handle_tx(); // TRY moving this line after last_time = ...
+//    current_time = millis();
+//    if(current_time - last_time > period) {
+//      mrf.send16(GW_ADDRESS,PUBLISH_MSGHUM,sizeof(PUBLISH_MSGHUM));
+//      last_time = millis();
+//    }
+//  }
+
+  delay(20);
 
   #ifdef DEBUG_MODE
-  Serial.print("Sending battery voltage...");
+  Serial.println("Sending battery voltage...");
   #endif
   mrf.send16(GW_ADDRESS,PUBLISH_MSGBAT,sizeof(PUBLISH_MSGBAT));
-  current_time = last_time = millis();
-
-  while(!handle_tx()) {
-    current_time = millis();
-    if((current_time - last_time) > period) {
-      #ifdef DEBUG_MODE
-      Serial.print("Sending battery voltage again...");
-      #endif
-      mrf.send16(GW_ADDRESS,PUBLISH_MSGBAT,sizeof(PUBLISH_MSGBAT)); // send the battery value again
-      last_time = millis();
-    }
-  }
-  delay(10);
+//  current_time = last_time = millis();
+////  ack = handle_tx();
+//
+//  while(!handle_tx()) {
+////    ack = handle_tx(); // TRY moving this line after last_time = ...
+//    current_time = millis();
+//    if(current_time - last_time > period) {
+//      mrf.send16(GW_ADDRESS,PUBLISH_MSGBAT,sizeof(PUBLISH_MSGBAT));
+//      last_time = millis();
+//    }
+//  }
+  delay(20);
 }
 
 void mrf_wake() {
   // Perform register wake-up
   mrf.write_short(MRF_WAKECON,mrf.read_short(MRF_WAKECON)|0x40); // Wake up sequence start
-  delay(10);
+//  delay(10);
   mrf.write_short(MRF_WAKECON,mrf.read_short(MRF_WAKECON)&0xBF); // Wake up sequence end
 
-  delay(10);
+//  delay(10);
   // RF State mashine reset
   mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)|0x04); // RF State mashine reset
-  delay(10);
+//  delay(10);
   mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)&0xFB); // RF State mashine release
 
-  delay(100); // 20 ms should be enough...
+  delay(20); // 20 ms should be enough...
 
-  mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear the interrupt
+//  mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear the interrupt
 
   #ifdef DEBUG_MODE
   Serial.println("Wireless module is ON");
