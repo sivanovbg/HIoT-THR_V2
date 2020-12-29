@@ -261,8 +261,11 @@ void loop() {
     Serial.println("Initialize done......................");
     #endif
 
-    mrf_init();
+//    noInterrupts();
+//    mrf_init();
+    mrf_set_timed_sleep();
     mrf.write_long(MRF_MAINCNT3,mrf.read_long(MRF_MAINCNT3)|0x80); // Put MRF into timed sleep!
+//    interrupts();
 
 //    delay(200);
 
@@ -366,43 +369,43 @@ void exchange_keepalive() {
     mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
 
 
-//    current_time = last_time = millis();
+    current_time = last_time = millis();
     
-//    while(!message_received) {
-//      
-//      mrf.check_flags(&handle_rx, &handle_tx);
-//      current_time = millis();
-//        
-//      if((current_time - last_time) > period) {
-//        #ifdef DEBUG_MODE
-//        Serial.print("Sending PINGREQ again ...");
-//        #endif
-//        mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
-//        last_time = millis();
-//      }
-//      
-//  }
-//
+    while(!message_received) {
+      
+      mrf.check_flags(&handle_rx, &handle_tx);
+      current_time = millis();
+        
+      if((current_time - last_time) > period) {
+        #ifdef DEBUG_MODE
+        Serial.print("Sending PINGREQ again ...");
+        #endif
+        mrf.send16(GW_ADDRESS,PINGREQ_MSG,sizeof(PINGREQ_MSG));
+        last_time = millis();
+      }
+      
+  }
 
-//   
-//   Msg.Length = rx_buffer[0];  // Fill in the message fields
-//   Msg.MsgType = rx_buffer[1];
-//   for(i=2;i<Msg.Length;i++) {
-//    Msg.Var[i-2] = rx_buffer[i];
-//   }
-//
-//     if(Msg.MsgType == PINGRESP) {
-//        #ifdef DEBUG_MODE
-//        Serial.println("PINGRESP received");
-//        #endif
-//        message_received = false;
-//        connection_timeout = false;
-//        timeout_timer = 3;
-//     }
-//      else
-//     {
-//      timeout_timer--;   
-//     }
+
+   
+   Msg.Length = rx_buffer[0];  // Fill in the message fields
+   Msg.MsgType = rx_buffer[1];
+   for(i=2;i<Msg.Length;i++) {
+    Msg.Var[i-2] = rx_buffer[i];
+   }
+
+     if(Msg.MsgType == PINGRESP) {
+        #ifdef DEBUG_MODE
+        Serial.println("PINGRESP received");
+        #endif
+        message_received = false;
+        connection_timeout = false;
+        timeout_timer = 3;
+     }
+      else
+     {
+      timeout_timer--;   
+     }
 }
 
 void timed_sleep(char sleep_count) {
@@ -539,7 +542,11 @@ void mrf_init() {
   mrf.set_pan(0xcfce); // pan ID = 0xABCD // Enter your 802.15.4 PAN ID here
   mrf.address16_write(OWN_ADDRESS);
 
-  // MRF24J40 Inits for timed sleep mode ***************************************************
+}
+
+void mrf_set_timed_sleep() {
+
+    // MRF24J40 Inits for timed sleep mode ***************************************************
 
   mrf.write_short(MRF_INTCON,mrf.read_short(MRF_INTCON)&0xBF); // Enable wake interrupt (bit 6)
 
@@ -550,10 +557,10 @@ void mrf_init() {
   //  delay(10);
   
   // 2. Initialize SLPCLKSEL = 0x2 (100 kHz Internal oscillator)
-  //    mrf.write_long(MRF_RFCON7,0x80);
+      mrf.write_long(MRF_RFCON7,0x80);
   
   // 3. Set CLKOUTEN = 1 and SLPCLKDIV = 0x01 done during MRF init phase
-
+  mrf.write_long(MRF_SLPCON1, 0x21); // – Initialize CLKOUTEN = 1 and SLPCLKDIV = 0x01.
   // 3.5 Calibrate
   mrf.write_long(MRF_SLPCAL2,mrf.read_long(MRF_SLPCAL2)&0x10);
 
@@ -566,7 +573,7 @@ void mrf_init() {
     mrf.write_long(MRF_WAKETIMEL,0xD2);
     mrf.write_long(MRF_WAKETIMEH,0x00);    
 
-        mrf.write_short(MRF_SLPACK,0x48); // bits 0..6 of WAKECNT
+    mrf.write_short(MRF_SLPACK,0x48); // bits 0..6 of WAKECNT
     mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)|0x08); // bit 7 of WAKECNT = 1
     mrf.write_short(MRF_RFCTL,mrf.read_short(MRF_RFCTL)&0xEF); // bit 8 of WAKECNT = 0
 
@@ -577,6 +584,9 @@ void mrf_init() {
     mrf.write_long(MRF_MAINCNT2,SLEEP_INTERVAL); // 0x05 = 15 s; 0x17 = 60 s; 0x64 = 5 min; 0xA5 = 7 min; 0xC8 = 10 min?
     mrf.write_long(MRF_MAINCNT3,0x00);
 
+    mrf.write_short(MRF_TXMCR,mrf.read_short(MRF_TXMCR)&0xDF); // SLOTTED = 0
+    mrf.write_short(MRF_ORDER,0xFF); // BO = SO = 0xFF
+  
 }
 
 void handle_rx() {
