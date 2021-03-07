@@ -144,8 +144,8 @@ void setup() {
 //                          //    according pins_arduino.h
 //  #endif
 
-//  pinMode(2,INPUT_PULLUP); // define input for MRF24J40 interrupt, PU is internal
-  pinMode(2,INPUT); // define input for MRF24J40 interrupt, PU is external
+  pinMode(2,INPUT_PULLUP); // define input for MRF24J40 interrupt, PU is internal
+//  pinMode(2,INPUT); // define input for MRF24J40 interrupt, PU is external
   pinMode(3,INPUT); // define input for reed sensor, PU is external
 
   attachInterrupt(0, interrupt_routine, FALLING);
@@ -180,6 +180,7 @@ void setup() {
   #endif
 
   mrf_init();
+  mrf_set_timed_sleep();
 
 }
 
@@ -263,11 +264,16 @@ void loop() {
 
 //    noInterrupts();
 //    mrf_init();
+//    mrf.set_pan(PAN_ID); // pan ID = 0xABCD // Enter your 802.15.4 PAN ID here
     mrf_set_timed_sleep();
+//    mrf.read_short(MRF_INTSTAT); // Read INTSTAT register to clear any interrupt flags so far
+    
     mrf.write_long(MRF_MAINCNT3,mrf.read_long(MRF_MAINCNT3)|0x80); // Put MRF into timed sleep!
 //    interrupts();
 
-//    delay(200);
+    delay(100);
+
+//    interrupts();
 
     LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 
@@ -431,12 +437,13 @@ void timed_sleep(char sleep_count) {
 //    delay(100);
 
     mrf.write_long(MRF_MAINCNT3,mrf.read_long(MRF_MAINCNT3)|0x80); // Put MRF into timed sleep!
+//    mrf.write_long(MRF_MAINCNT3,0x80); // Put MRF into timed sleep!
 
 //    delay(100); // Before spi_off
 //    spi_off();
 //    delay(100); // SPI OFF to Arduino OFF
 
-//    delay(100);
+    delay(100);
 //
     interrupts();
 
@@ -539,7 +546,7 @@ void mrf_init() {
   mrf.reset();
   mrf.init();
 
-  mrf.set_pan(0xcfce); // pan ID = 0xABCD // Enter your 802.15.4 PAN ID here
+  mrf.set_pan(PAN_ID);
   mrf.address16_write(OWN_ADDRESS);
 
 }
